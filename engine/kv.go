@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -15,14 +16,16 @@ const (
 )
 
 type KVStorage struct {
-	mtx  *sync.RWMutex
-	data map[string]any
+	mtx     *sync.RWMutex
+	data    map[string]any
+	dataDir string
 }
 
-func NewKVStore() *KVStorage {
+func NewKVStore(dataDir string) *KVStorage {
 	return &KVStorage{
-		mtx:  &sync.RWMutex{},
-		data: make(map[string]any),
+		mtx:     &sync.RWMutex{},
+		data:    make(map[string]any),
+		dataDir: dataDir,
 	}
 }
 
@@ -88,11 +91,11 @@ func (k *KVStorage) Flush() error {
 	k.mtx.Unlock()
 	writer.Write(data)
 	writer.Close()
-	return os.WriteFile("omatdb_saved_gzip.gz", buf.Bytes(), 0666)
+	return os.WriteFile(fmt.Sprintf("%s/omatdb.gz", k.dataDir), buf.Bytes(), 0666)
 }
 
 func (k *KVStorage) Load() error {
-	fi, err := os.Open("omatdb_saved_gzip.gz")
+	fi, err := os.Open(fmt.Sprintf("%s/omatdb.gz", k.dataDir))
 	if err != nil {
 		return err
 	}

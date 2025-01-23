@@ -5,7 +5,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"time"
 
+	"github.com/socketspace-jihad/omatdb/consensus"
 	"github.com/socketspace-jihad/omatdb/engine"
 )
 
@@ -36,7 +38,7 @@ func NewKVHandler(kvs *engine.KVStorage) *KVHttpHandler {
 	}
 }
 
-func (k *KVHttpHandler) Run() {
+func (k *KVHttpHandler) Run(httpAddr string, cnss *consensus.Raft) {
 
 	k.ServeMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("hello from omatdb"))
@@ -76,8 +78,19 @@ func (k *KVHttpHandler) Run() {
 			http.Error(w, "kv body is not valid", http.StatusBadRequest)
 			return
 		}
-		if err := k.KVStorage.Store(data.Key, data.Value); err != nil {
+		c := consensus.Command{
+			Operation: "post",
+			Key:       data.Key,
+			Value:     data.Value,
+		}
+		b, err := json.Marshal(c)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		future := cnss.Rft.Apply(b, 10*time.Second)
+		if err := future.Error(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(data)
@@ -99,8 +112,19 @@ func (k *KVHttpHandler) Run() {
 			http.Error(w, "kv body is not valid", http.StatusBadRequest)
 			return
 		}
-		if err := k.KVStorage.Update(data.Key, data.Value); err != nil {
+		c := consensus.Command{
+			Operation: "update",
+			Key:       data.Key,
+			Value:     data.Value,
+		}
+		b, err := json.Marshal(c)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		future := cnss.Rft.Apply(b, 10*time.Second)
+		if err := future.Error(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(data)
@@ -122,15 +146,26 @@ func (k *KVHttpHandler) Run() {
 			http.Error(w, "key in body must exists", http.StatusBadRequest)
 			return
 		}
-		if err := k.KVStorage.Delete(data.Key); err != nil {
+		c := consensus.Command{
+			Operation: "delete",
+			Key:       data.Key,
+			Value:     data.Value,
+		}
+		b, err := json.Marshal(c)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		future := cnss.Rft.Apply(b, 10*time.Second)
+		if err := future.Error(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		json.NewEncoder(w).Encode(data)
 	})
 
-	log.Println("omatdb listening on port: 3300")
-	if err := http.ListenAndServe(":3300", k.ServeMux); err != nil {
+	log.Printf("omatdb listening on %s\n", httpAddr)
+	if err := http.ListenAndServe(httpAddr, k.ServeMux); err != nil {
 		log.Fatalln(err.Error())
 	}
 
