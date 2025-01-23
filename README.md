@@ -1,4 +1,4 @@
-
+![alt text](https://github.com/socketspace-jihad/omatdb/omatdb-logo.png)
 # OmatDB - Distributed Key Value Store
 
 ## Why i build this ?
